@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: notifyhub-rabbitmq
+    ports:
+      # Port for applications to connect to RabbitMQ.
+      - "5672:5672"
+      # Port for the web-based management UI.
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    networks:
+      - notifyhub-net
+
+  app:
+    build: .
+    container_name: notifyhub-app
+    depends_on:
+      - rabbitmq
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+    networks:
+      - notifyhub-net
+
+networks:
+  notifyhub-net:
+    driver: bridge
