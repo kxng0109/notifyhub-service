@@ -38,7 +38,8 @@ public class NotificationControllerTest {
         NotificationRequest notificationRequest = new NotificationRequest(
                 "example@email.com",
                 "This is a test",
-                "This is a body for a test"
+                "This is a textBody for a test",
+                null
         );
 
         mockMvc.perform(post("/api/notifications")
@@ -52,7 +53,7 @@ public class NotificationControllerTest {
 
     @Test
     void sendNotification_should_throw400BadRequest_whenRequestIsInvalid() throws Exception {
-        NotificationRequest notificationRequest = new NotificationRequest(null, null, null);
+        NotificationRequest notificationRequest = new NotificationRequest(null, null, null, null);
         mockMvc.perform(post("/api/notifications")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(notificationRequest)))

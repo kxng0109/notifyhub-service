@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -50,13 +51,29 @@ public class NotificationConsumer {
         }
 
         try {
-            emailService.sendSimpleMessage(
-                    notificationRequest.to(),
-                    notificationRequest.subject(),
-                    notificationRequest.textBody()
-            );
+            if (StringUtils.hasText(notificationRequest.htmlBody())) {
+                emailService.sendHtmlMessage(
+                        notificationRequest.to(),
+                        notificationRequest.subject(),
+                        notificationRequest.htmlBody()
+                );
+            } else if (StringUtils.hasText(notificationRequest.textBody())) {
+                emailService.sendSimpleMessage(
+                        notificationRequest.to(),
+                        notificationRequest.subject(),
+                        notificationRequest.textBody()
+                );
+            } else {
+                logger.error("Notification request has no body (text or HTML). Discarding: {}", notificationRequest);
+                throw new AmqpRejectAndDontRequeueException("Notification request has no body (text or HTML).");
+            }
         } catch (MailException e) {
-            logger.error("Error sending email to {}: {}", notificationRequest.to(), e.getMessage(), e);
+            logger.error("Email sending failed (Attempt {}). Error: {}. Message: {}",
+                         currentRetryCount + 1,
+                         e.getMessage(),
+                         notificationRequest,
+                         e
+            );
             throw new AmqpRejectAndDontRequeueException("Email sending failed", e);
         }
     }

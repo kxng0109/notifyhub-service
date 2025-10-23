@@ -1,12 +1,15 @@
 package io.github.kxng0109.notifyhub.service;
 
 import io.github.kxng0109.notifyhub.dto.NotificationRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -17,8 +20,8 @@ import java.util.concurrent.TimeUnit;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.EXCHANGE_NAME;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.ROUTING_KEY;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @Testcontainers
@@ -30,7 +33,7 @@ public class NotificationConsumerTest {
     private RabbitTemplate rabbitTemplate;
     @MockitoSpyBean
     private NotificationConsumer notificationConsumer;
-    @MockitoSpyBean
+    @MockitoBean
     private EmailService emailService;
 
     @DynamicPropertySource
@@ -44,12 +47,19 @@ public class NotificationConsumerTest {
         registry.add("notifyhub.mail.from", () -> "test@notifyhub.com");
     }
 
+    @BeforeEach
+    void resetSpies() {
+        // Resets invocation counts on spies between tests
+        reset(notificationConsumer, emailService);
+    }
+
     @Test
-    public void handleNotification_should_processMessage_whenMessageIsPublishedToQueue() {
+    public void handleNotification_should_callSendSimpleMessage_whenOnlyTextBodyIsPresent() {
         NotificationRequest notificationRequest = new NotificationRequest(
                 "test@email.com",
                 "This is a test subject",
-                "This is a test body"
+                "This is a test text body",
+                null
         );
 
         rabbitTemplate.convertAndSend(
@@ -65,10 +75,54 @@ public class NotificationConsumerTest {
                     verify(emailService).sendSimpleMessage(
                             eq(notificationRequest.to()),
                             eq(notificationRequest.subject()),
-                            eq(notificationRequest.body())
+                            eq(notificationRequest.textBody())
                     );
 
-                    verify(notificationConsumer).handleNotification(notificationRequest);
+                    verify(notificationConsumer)
+                            .handleNotification(any(NotificationRequest.class), any(Message.class));
+
+                    verify(emailService, never()).sendHtmlMessage(
+                            anyString(),
+                            anyString(),
+                            anyString()
+                    );
+                });
+    }
+
+    @Test
+    public void handleNotification_should_callSendHtmlMessage_whenHtmlBodyIsPresent() {
+        NotificationRequest notificationRequest = new NotificationRequest(
+                "test@email.com",
+                "A test subject",
+                "Fallback text body",
+                "<p>This is a test text body</p>"
+        );
+
+
+        rabbitTemplate.convertAndSend(
+                EXCHANGE_NAME,
+                ROUTING_KEY,
+                notificationRequest
+        );
+
+        await()
+                .atMost(10, TimeUnit.SECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> {
+                    verify(emailService).sendHtmlMessage(
+                            eq(notificationRequest.to()),
+                            eq(notificationRequest.subject()),
+                            eq(notificationRequest.htmlBody())
+                    );
+
+                    verify(notificationConsumer)
+                            .handleNotification(any(NotificationRequest.class), any(Message.class));
+
+                    verify(emailService, never()).sendSimpleMessage(
+                            anyString(),
+                            anyString(),
+                            anyString()
+                    );
                 });
     }
 }

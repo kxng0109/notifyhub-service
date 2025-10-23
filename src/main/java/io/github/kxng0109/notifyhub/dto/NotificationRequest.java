@@ -11,7 +11,8 @@ public record NotificationRequest(
         @NotBlank(message = "Subject cannot be blank")
         String subject,
 
-        @NotBlank(message = "Body cannot be blank")
-        String body
+        String textBody,
+
+        String htmlBody
 ) {
 }
