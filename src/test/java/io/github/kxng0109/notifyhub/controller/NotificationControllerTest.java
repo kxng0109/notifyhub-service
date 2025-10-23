@@ -9,17 +9,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.EXCHANGE_NAME;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.ROUTING_KEY;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 public class NotificationControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
@@ -54,7 +58,6 @@ public class NotificationControllerTest {
                                 .content(objectMapper.writeValueAsString(notificationRequest)))
                .andExpect(status().isBadRequest());
 
-        Mockito.verify(rabbitTemplate, Mockito.never())
-               .convertAndSend(any(), any(), notificationRequest);
+        verify(rabbitTemplate, never()).convertAndSend(any(), any(), any(NotificationRequest.class));
     }
 }

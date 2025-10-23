@@ -15,6 +15,17 @@ services:
     networks:
       - notifyhub-net
 
+  mailhog:
+    image: mailhog/mailhog
+    container_name: notifyhub-mailhog
+    ports:
+      # Default SMTP port MailHog listens on
+      - "1025:1025"
+      # Web UI port
+      - "8025:8025"
+    networks:
+      - notifyhub-net
+
   app:
     build: .
     container_name: notifyhub-app
@@ -24,6 +35,7 @@ services:
       - "8080:8080"
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
+      notifyhub.mail.from: ${NOTIFYHUB_MAIL_FROM}
     networks:
       - notifyhub-net
 

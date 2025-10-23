@@ -40,7 +40,8 @@ public class NotificationConsumerTest {
         registry.add("spring.rabbitmq.username", RABBIT_MQ_CONTAINER::getAdminUsername);
         registry.add("spring.rabbitmq.password", RABBIT_MQ_CONTAINER::getAdminPassword);
         registry.add("spring.mail.host", () -> "localhost");
-        registry.add("spring.mail.port", () -> 2525);
+        registry.add("spring.mail.port", () -> 1025);
+        registry.add("notifyhub.mail.from", () -> "test@notifyhub.com");
     }
 
     @Test
