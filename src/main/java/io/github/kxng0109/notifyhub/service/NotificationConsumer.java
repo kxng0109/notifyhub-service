@@ -3,7 +3,9 @@ package io.github.kxng0109.notifyhub.service;
 import io.github.kxng0109.notifyhub.dto.NotificationRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.mail.MailException;
 import org.springframework.stereotype.Service;
 
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.QUEUE_NAME;
@@ -22,10 +24,15 @@ public class NotificationConsumer {
     public void handleNotification(NotificationRequest notificationRequest) {
         logger.info("Received notification from queue -> {}", notificationRequest);
 
-        emailService.sendSimpleMessage(
-                notificationRequest.to(),
-                notificationRequest.subject(),
-                notificationRequest.body()
-        );
+        try{
+            emailService.sendSimpleMessage(
+                    notificationRequest.to(),
+                    notificationRequest.subject(),
+                    notificationRequest.body()
+            );
+        }catch (MailException e){
+            logger.error("Error sending email to {}: {}", notificationRequest.to(), e.getMessage(), e);
+            throw new AmqpRejectAndDontRequeueException("Email sending failed", e);
+        }
     }
 }
