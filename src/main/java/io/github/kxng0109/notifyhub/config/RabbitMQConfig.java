@@ -5,6 +5,7 @@ import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFacto
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,12 +19,15 @@ public class RabbitMQConfig {
     public static final String DEAD_LETTER_EXCHANGE_NAME = "notifications_dlx";
     public static final String DEAD_LETTER_ROUTING_KEY = "notifications.dlq.routing.key";
 
+    @Value("${notifyhub.rabbitmq.dlq.ttl:5000}")
+    private int dlqTtl;
+
     @Bean
     public Queue queue() {
         return QueueBuilder
                 .durable(QUEUE_NAME)
                 .withArgument("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE_NAME)
-                .withArgument("x-dead-letter-routing-key", DEAD_LETTER_ROUTING_KEY)
+                .withArgument("x-dead-letter-routing-key", ROUTING_KEY)
                 .build();
     }
 
@@ -39,7 +43,14 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue dlq() {
-        return QueueBuilder.durable(DEAD_LETTER_QUEUE_NAME).build();
+        return QueueBuilder.durable(DEAD_LETTER_QUEUE_NAME)
+                           //How long to wait before retrying
+                           .withArgument("x-message-ttl", dlqTtl)
+                           //Send the messages to the original exchange after TTL expires
+                           .withArgument("x-dead-letter-exchange", EXCHANGE_NAME)
+                           //The routing key to use when sending messages to the original exchange
+                           .withArgument("x-dead-letter-routing-key", ROUTING_KEY)
+                           .build();
     }
 
     @Bean
