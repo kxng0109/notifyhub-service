@@ -38,7 +38,7 @@ public class NotificationControllerTest {
     @Test
     void sendNotification_should_return202Accepted_whenRequestIsValid() throws Exception {
         NotificationRequest notificationRequest = new NotificationRequest(
-                "example@email.com",
+                List.of("example@email.com"),
                 "This is a test",
                 "This is a textBody for a test",
                 null,
@@ -50,13 +50,13 @@ public class NotificationControllerTest {
                                 .content(objectMapper.writeValueAsString(notificationRequest)))
                .andExpect(status().isAccepted());
 
-        Mockito.verify(rabbitTemplate, Mockito.atLeastOnce())
+        Mockito.verify(rabbitTemplate)
                .convertAndSend(EXCHANGE_NAME, ROUTING_KEY, notificationRequest);
     }
 
     @Test
     void sendNotification_should_throw400BadRequest_whenRequestIsInvalid() throws Exception {
-        NotificationRequest notificationRequest = new NotificationRequest(null, null, null, null, List.of());
+        NotificationRequest notificationRequest = new NotificationRequest(null, null, null, null, null);
         mockMvc.perform(post("/api/notifications")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(notificationRequest)))

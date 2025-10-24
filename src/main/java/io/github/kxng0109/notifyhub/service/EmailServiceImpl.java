@@ -30,29 +30,35 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public void sendSimpleMessage(String to, String subject, String text) {
+    public void sendSimpleMessage(List<String> to, String subject, String text) {
+        String[] recipientAddresses = to.toArray(new String[0]);
+
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailFromAddress);
-        message.setTo(to);
+        message.setTo(mailFromAddress);
+        message.setBcc(recipientAddresses);
         message.setSubject(subject);
         message.setText(text);
 
         emailSender.send(message);
-        logger.info("Successfully dispatched plain text email to {}", to);
+        logger.info("Successfully dispatched plain text email to {} recipients.", to.size());
     }
 
     @Override
-    public void sendHtmlMessage(String to, String subject, String htmlContent, List<AttachmentRequest> attachments) {
+    public void sendHtmlMessage(List<String> to, String subject, String htmlContent, List<AttachmentRequest> attachments) {
+        String[] recipientAddresses = to.toArray(new String[0]);
+
         MimeMessage message = emailSender.createMimeMessage();
         try {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(mailFromAddress);
-            helper.setTo(to);
+            helper.setTo(mailFromAddress);
+            helper.setBcc(recipientAddresses);
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
 
-            if(attachments != null && !attachments.isEmpty()){
-                for(AttachmentRequest attachment:attachments){
+            if (attachments != null && !attachments.isEmpty()) {
+                for (AttachmentRequest attachment : attachments) {
                     String fileName = attachment.filename();
                     String contentType = attachment.contentType();
                     String data = attachment.data();
@@ -65,10 +71,10 @@ public class EmailServiceImpl implements EmailService {
             }
 
             emailSender.send(message);
-            logger.info("Successfully dispatched HTML email to {}", to);
+            logger.info("Successfully dispatched HTML email to {} recipients.", to.size());
         } catch (MessagingException e) {
-            logger.error("Failed to send HTML email to {}", to, e);
-            throw new MailSendException("Failed to send HTML email to " + to, e);
+            logger.error("Failed to send HTML email to {} recipients", to.size(), e);
+            throw new MailSendException("Failed to send HTML email to " + to.size() + " recipients", e);
         }
     }
 

@@ -68,7 +68,7 @@ public class NotificationConsumerTest {
     @Test
     public void handleNotification_should_callSendSimpleMessage_whenOnlyTextBodyIsPresent() {
         NotificationRequest notificationRequest = new NotificationRequest(
-                "test@email.com",
+                List.of("test@email.com", "test2@email.com"),
                 "This is a test subject",
                 "This is a test text body",
                 null,
@@ -95,7 +95,7 @@ public class NotificationConsumerTest {
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
 
                     verify(emailService, never()).sendHtmlMessage(
-                            anyString(),
+                            anyList(),
                             anyString(),
                             anyString(),
                             anyList()
@@ -112,7 +112,7 @@ public class NotificationConsumerTest {
         );
 
         NotificationRequest notificationRequest = new NotificationRequest(
-                "test@email.com",
+                List.of("test@email.com", "test2@email.com"),
                 "A test subject",
                 null,
                 "<p>This is a test text body</p>",
@@ -142,7 +142,7 @@ public class NotificationConsumerTest {
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
 
                     verify(emailService, never()).sendSimpleMessage(
-                            anyString(),
+                            anyList(),
                             anyString(),
                             anyString()
                     );
@@ -157,7 +157,7 @@ public class NotificationConsumerTest {
     @Test
     public void handleNotification_should_retryAndSucceed_whenFirstAttemptFails() {
         NotificationRequest notificationRequest = new NotificationRequest(
-                "test@email.com",
+                List.of("test@email.com", "test2@email.com"),
                 "A sample test subject",
                 "A sample test body",
                 null,
@@ -167,7 +167,7 @@ public class NotificationConsumerTest {
         doThrow(MailSendException.class)
                 .doNothing()
                 .when(emailService)
-                .sendSimpleMessage(anyString(), anyString(), anyString());
+                .sendSimpleMessage(anyList(), anyString(), anyString());
 
         rabbitTemplate.convertAndSend(
                 EXCHANGE_NAME,
@@ -192,7 +192,7 @@ public class NotificationConsumerTest {
     @Test
     public void handleNotification_should_discardMessage_whenMaxRetriesExceeded() {
         NotificationRequest notificationRequest = new NotificationRequest(
-                "test@email.com",
+                List.of("test@email.com", "test2@email.com"),
                 "A sample test subject",
                 "A sample test body",
                 null,
@@ -201,7 +201,7 @@ public class NotificationConsumerTest {
 
         doThrow(MailSendException.class)
                 .when(emailService)
-                .sendSimpleMessage(anyString(), anyString(), anyString());
+                .sendSimpleMessage(anyList(), anyString(), anyString());
 
         rabbitTemplate.convertAndSend(
                 EXCHANGE_NAME,
@@ -215,7 +215,7 @@ public class NotificationConsumerTest {
                     verify(notificationConsumer, times(EXPECTED_TOTAL_ATTEMPTS))
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
                     verify(emailService, never())
-                            .sendHtmlMessage(anyString(), anyString(), anyString(), anyList());
+                            .sendHtmlMessage(anyList(), anyString(), anyString(), anyList());
                     verify(emailService, times(MAX_RETRIES))
                             .sendSimpleMessage(
                                     eq(notificationRequest.to()),
