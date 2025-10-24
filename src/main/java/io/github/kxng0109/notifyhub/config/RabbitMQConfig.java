@@ -17,7 +17,7 @@ public class RabbitMQConfig {
 
     public static final String DEAD_LETTER_QUEUE_NAME = "notifications_dlq";
     public static final String DEAD_LETTER_EXCHANGE_NAME = "notifications_dlx";
-    public static final String DEAD_LETTER_ROUTING_KEY = "notifications.dlq.routing.key";
+//    public static final String DEAD_LETTER_ROUTING_KEY = "notifications.dlq.routing.key";
 
     @Value("${notifyhub.rabbitmq.dlq.ttl:5000}")
     private int dlqTtl;
@@ -59,8 +59,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Binding dlqBinding(Queue dlq, TopicExchange dlx) {
-        return BindingBuilder.bind(dlq).to(dlx).with(DEAD_LETTER_ROUTING_KEY);
+    public Binding dlqBinding(Queue dlq, FanoutExchange dlx) {
+        return BindingBuilder.bind(dlq).to(dlx);
     }
 
     @Bean
