@@ -1,8 +1,10 @@
 package io.github.kxng0109.notifyhub.service;
 
+import io.github.kxng0109.notifyhub.dto.AttachmentRequest;
 import io.github.kxng0109.notifyhub.dto.NotificationRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,11 +18,14 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.Base64;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.EXCHANGE_NAME;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.ROUTING_KEY;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -66,7 +71,8 @@ public class NotificationConsumerTest {
                 "test@email.com",
                 "This is a test subject",
                 "This is a test text body",
-                null
+                null,
+                List.of()
         );
 
         rabbitTemplate.convertAndSend(
@@ -91,20 +97,29 @@ public class NotificationConsumerTest {
                     verify(emailService, never()).sendHtmlMessage(
                             anyString(),
                             anyString(),
-                            anyString()
+                            anyString(),
+                            anyList()
                     );
                 });
     }
 
     @Test
     public void handleNotification_should_callSendHtmlMessage_whenHtmlBodyIsPresent() {
+        AttachmentRequest attachmentRequest = new AttachmentRequest(
+                "File name",
+                "text/plain",
+                Base64.getEncoder().encodeToString("test".getBytes())
+        );
+
         NotificationRequest notificationRequest = new NotificationRequest(
                 "test@email.com",
                 "A test subject",
-                "Fallback text body",
-                "<p>This is a test text body</p>"
+                null,
+                "<p>This is a test text body</p>",
+                List.of(attachmentRequest)
         );
 
+        ArgumentCaptor<List<AttachmentRequest>> captor = ArgumentCaptor.captor();
 
         rabbitTemplate.convertAndSend(
                 EXCHANGE_NAME,
@@ -119,7 +134,8 @@ public class NotificationConsumerTest {
                     verify(emailService).sendHtmlMessage(
                             eq(notificationRequest.to()),
                             eq(notificationRequest.subject()),
-                            eq(notificationRequest.htmlBody())
+                            eq(notificationRequest.htmlBody()),
+                            captor.capture()
                     );
 
                     verify(notificationConsumer)
@@ -131,6 +147,11 @@ public class NotificationConsumerTest {
                             anyString()
                     );
                 });
+
+        List<AttachmentRequest> capturedList = captor.getValue();
+        assertEquals(1, capturedList.size());
+        assertEquals(attachmentRequest, capturedList.getFirst());
+        assertEquals(attachmentRequest.data(), capturedList.getFirst().data());
     }
 
     @Test
@@ -139,7 +160,8 @@ public class NotificationConsumerTest {
                 "test@email.com",
                 "A sample test subject",
                 "A sample test body",
-                null
+                null,
+                List.of()
         );
 
         doThrow(MailSendException.class)
@@ -173,7 +195,8 @@ public class NotificationConsumerTest {
                 "test@email.com",
                 "A sample test subject",
                 "A sample test body",
-                null
+                null,
+                List.of()
         );
 
         doThrow(MailSendException.class)
@@ -192,7 +215,7 @@ public class NotificationConsumerTest {
                     verify(notificationConsumer, times(EXPECTED_TOTAL_ATTEMPTS))
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
                     verify(emailService, never())
-                            .sendHtmlMessage(anyString(), anyString(), anyString());
+                            .sendHtmlMessage(anyString(), anyString(), anyString(), anyList());
                     verify(emailService, times(MAX_RETRIES))
                             .sendSimpleMessage(
                                     eq(notificationRequest.to()),

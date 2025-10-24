@@ -1,15 +1,20 @@
 package io.github.kxng0109.notifyhub.service;
 
+import io.github.kxng0109.notifyhub.dto.AttachmentRequest;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+
+import java.util.Base64;
+import java.util.List;
 
 @Service
 public class EmailServiceImpl implements EmailService {
@@ -37,7 +42,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public void sendHtmlMessage(String to, String subject, String htmlContent) {
+    public void sendHtmlMessage(String to, String subject, String htmlContent, List<AttachmentRequest> attachments) {
         MimeMessage message = emailSender.createMimeMessage();
         try {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -45,6 +50,19 @@ public class EmailServiceImpl implements EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
+
+            if(attachments != null && !attachments.isEmpty()){
+                for(AttachmentRequest attachment:attachments){
+                    String fileName = attachment.filename();
+                    String contentType = attachment.contentType();
+                    String data = attachment.data();
+
+                    byte[] decodedData = Base64.getDecoder().decode(data);
+                    ByteArrayResource dataSource = new ByteArrayResource(decodedData);
+
+                    helper.addAttachment(fileName, dataSource, contentType);
+                }
+            }
 
             emailSender.send(message);
             logger.info("Successfully dispatched HTML email to {}", to);

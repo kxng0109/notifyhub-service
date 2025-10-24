@@ -13,6 +13,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.EXCHANGE_NAME;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.ROUTING_KEY;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,7 +41,8 @@ public class NotificationControllerTest {
                 "example@email.com",
                 "This is a test",
                 "This is a textBody for a test",
-                null
+                null,
+                List.of()
         );
 
         mockMvc.perform(post("/api/notifications")
@@ -53,7 +56,7 @@ public class NotificationControllerTest {
 
     @Test
     void sendNotification_should_throw400BadRequest_whenRequestIsInvalid() throws Exception {
-        NotificationRequest notificationRequest = new NotificationRequest(null, null, null, null);
+        NotificationRequest notificationRequest = new NotificationRequest(null, null, null, null, List.of());
         mockMvc.perform(post("/api/notifications")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(notificationRequest)))

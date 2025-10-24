@@ -55,7 +55,8 @@ public class NotificationConsumer {
                 emailService.sendHtmlMessage(
                         notificationRequest.to(),
                         notificationRequest.subject(),
-                        notificationRequest.htmlBody()
+                        notificationRequest.htmlBody(),
+                        notificationRequest.attachments()
                 );
             } else if (StringUtils.hasText(notificationRequest.textBody())) {
                 emailService.sendSimpleMessage(

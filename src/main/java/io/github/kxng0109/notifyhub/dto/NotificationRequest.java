@@ -1,7 +1,10 @@
 package io.github.kxng0109.notifyhub.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+
+import java.util.List;
 
 public record NotificationRequest(
         @NotBlank(message = "'To' cannot be blank")
@@ -13,6 +16,9 @@ public record NotificationRequest(
 
         String textBody,
 
-        String htmlBody
+        String htmlBody,
+
+        @Valid
+        List<AttachmentRequest> attachments
 ) {
 }
