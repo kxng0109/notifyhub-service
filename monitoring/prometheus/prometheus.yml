@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "notifyhub-service"
+    dns_sd_configs:
+      - names:
+          - "app"
+        type: "A"
+        port: 8080
+
+    relabel_configs:
+      - source_labels: ["__meta_dns_name"]
+        target_label: "instance"
+
+      - target_label: "__metrics_path__"
+        replacement: "/actuator/prometheus"

@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   rabbitmq:
-    image: rabbitmq:4-management
+    image: rabbitmq:3-management
     container_name: notifyhub-rabbitmq
     ports:
       # Port for applications to connect to RabbitMQ.
@@ -15,11 +13,11 @@ services:
     networks:
       - notifyhub-net
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
 
   mailhog:
     image: mailhog/mailhog
@@ -47,9 +45,45 @@ services:
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       SPRING_RABBITMQ_HOST: rabbitmq
       notifyhub.mail.from: ${NOTIFYHUB_MAIL_FROM}
+      management.health.rabbit.enabled: true
+      management.health.mail.enabled: true
+    healthcheck:
+        test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 10s
+    networks:
+      - notifyhub-net
+
+  prometheus:
+    image: prom/prometheus
+    container_name: notifyhub-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - notifyhub-net
+
+  grafana:
+    image: grafana/grafana
+    container_name: notifyhub-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana-data:/var/lib/grafana
     networks:
       - notifyhub-net
 
 networks:
   notifyhub-net:
     driver: bridge
+
+volumes:
+  grafana-data:
