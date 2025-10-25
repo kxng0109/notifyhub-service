@@ -88,7 +88,7 @@ public class NotificationConsumerTest {
                     verify(emailService).sendSimpleMessage(
                             eq(notificationRequest.to()),
                             eq(notificationRequest.subject()),
-                            eq(notificationRequest.textBody())
+                            eq(notificationRequest.body())
                     );
 
                     verify(notificationConsumer)
@@ -182,7 +182,7 @@ public class NotificationConsumerTest {
                             .sendSimpleMessage(
                                     eq(notificationRequest.to()),
                                     eq(notificationRequest.subject()),
-                                    eq(notificationRequest.textBody())
+                                    eq(notificationRequest.body())
                             );
                     verify(notificationConsumer, times(2))
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
@@ -220,7 +220,7 @@ public class NotificationConsumerTest {
                             .sendSimpleMessage(
                                     eq(notificationRequest.to()),
                                     eq(notificationRequest.subject()),
-                                    eq(notificationRequest.textBody())
+                                    eq(notificationRequest.body())
                             );
                 });
     }

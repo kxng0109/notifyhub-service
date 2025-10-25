@@ -40,7 +40,7 @@ public class NotificationControllerTest {
         NotificationRequest notificationRequest = new NotificationRequest(
                 List.of("example@email.com"),
                 "This is a test",
-                "This is a textBody for a test",
+                "This is a body for a test",
                 null,
                 List.of()
         );

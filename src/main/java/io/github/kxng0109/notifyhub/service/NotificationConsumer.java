@@ -58,11 +58,11 @@ public class NotificationConsumer {
                         notificationRequest.htmlBody(),
                         notificationRequest.attachments()
                 );
-            } else if (StringUtils.hasText(notificationRequest.textBody())) {
+            } else if (StringUtils.hasText(notificationRequest.body())) {
                 emailService.sendSimpleMessage(
                         notificationRequest.to(),
                         notificationRequest.subject(),
-                        notificationRequest.textBody()
+                        notificationRequest.body()
                 );
             } else {
                 logger.error("Notification request has no body (text or HTML). Discarding: {}", notificationRequest);
