@@ -16,3 +16,13 @@ scrape_configs:
 
       - target_label: "__metrics_path__"
         replacement: "/actuator/prometheus"
+
+  - job_name: "rabbitmq"
+    dns_sd_configs:
+      - names: [ "rabbitmq" ] # The service name from docker-compose.yml
+        type: "A"
+        # The default port for the RabbitMQ prometheus plugin
+        port: 15692
+    relabel_configs:
+      - source_labels: [ "__meta_dns_name" ]
+        target_label: "instance"
