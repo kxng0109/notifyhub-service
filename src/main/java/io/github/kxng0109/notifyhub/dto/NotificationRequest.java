@@ -8,8 +8,8 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 public record NotificationRequest(
-        @NotEmpty(message = "'To' cannot be blank")
-        List<@Email(message = "Email address must be valid") String> to,
+        @NotEmpty(message = "'To' list cannot be empty")
+        List<@NotBlank @Email(message = "Email address must be valid") String> to,
 
         @NotBlank(message = "Subject cannot be blank")
         String subject,

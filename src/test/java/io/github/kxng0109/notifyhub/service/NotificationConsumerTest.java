@@ -3,7 +3,9 @@ package io.github.kxng0109.notifyhub.service;
 import io.github.kxng0109.notifyhub.dto.AttachmentRequest;
 import io.github.kxng0109.notifyhub.dto.NotificationRequest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -17,13 +19,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.EXCHANGE_NAME;
+import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.DELAYED_EXCHANGE_NAME;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.ROUTING_KEY;
+import static io.github.kxng0109.notifyhub.service.NotificationProducer.HEADER_RETRY_COUNT;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
@@ -31,14 +35,20 @@ import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @Testcontainers
+@DisplayName("NotificationConsumer Integration Tests")
 public class NotificationConsumerTest {
 
+    //We can't be waiting for long, so max retries of 2 is perfect.
     private static final int MAX_RETRIES = 2;
-    private static final int DLQ_TTL_MS = 100;
-    private static final int EXPECTED_TOTAL_ATTEMPTS = MAX_RETRIES + 1;
+    private static final int AWAIT_TIMEOUT_SECONDS = 5;
 
     @Container
-    private static final RabbitMQContainer RABBIT_MQ_CONTAINER = new RabbitMQContainer("rabbitmq:4-management");
+    //A docker image that has the plugin pre-installed
+    private static final RabbitMQContainer RABBIT_MQ_CONTAINER = new RabbitMQContainer(
+            DockerImageName.parse("heidiks/rabbitmq-delayed-message-exchange:3.13.0-management")
+                           .asCompatibleSubstituteFor("rabbitmq")
+    );
+
     @Autowired
     private RabbitTemplate rabbitTemplate;
     @MockitoSpyBean
@@ -52,20 +62,25 @@ public class NotificationConsumerTest {
         registry.add("spring.rabbitmq.port", RABBIT_MQ_CONTAINER::getAmqpPort);
         registry.add("spring.rabbitmq.username", RABBIT_MQ_CONTAINER::getAdminUsername);
         registry.add("spring.rabbitmq.password", RABBIT_MQ_CONTAINER::getAdminPassword);
+
         registry.add("spring.mail.host", () -> "localhost");
         registry.add("spring.mail.port", () -> 1025);
         registry.add("notifyhub.mail.from", () -> "test@notifyhub.com");
+
         registry.add("notifyhub.rabbitmq.maxRetries", () -> MAX_RETRIES);
-        registry.add("notifyhub.rabbitmq.dlq.ttl", () -> DLQ_TTL_MS);
+        registry.add("notifyhub.rabbitmq.backoff.base", () -> "2");        // 2 instead of 5
+        registry.add("notifyhub.rabbitmq.backoff.multiplier", () -> "100");
     }
 
     @BeforeEach
     void resetCounterAndMocks() {
         // Resets invocation counts on spies between tests
         reset(notificationConsumer, emailService);
+        NotificationConsumer.counter.set(0);
     }
 
     @Test
+    @DisplayName("Should send simple email when only text body is present")
     public void handleNotification_should_callSendSimpleMessage_whenOnlyTextBodyIsPresent() {
         NotificationRequest notificationRequest = new NotificationRequest(
                 List.of("test@email.com", "test2@email.com"),
@@ -76,9 +91,13 @@ public class NotificationConsumerTest {
         );
 
         rabbitTemplate.convertAndSend(
-                EXCHANGE_NAME,
+                DELAYED_EXCHANGE_NAME,
                 ROUTING_KEY,
-                notificationRequest
+                notificationRequest,
+                msg -> {
+                    msg.getMessageProperties().getHeaders().put(HEADER_RETRY_COUNT, 0);
+                    return msg;
+                }
         );
 
         await()
@@ -104,6 +123,7 @@ public class NotificationConsumerTest {
     }
 
     @Test
+    @DisplayName("Should send HTML email with attachments when HTML body is present")
     public void handleNotification_should_callSendHtmlMessage_whenHtmlBodyIsPresent() {
         AttachmentRequest attachmentRequest = new AttachmentRequest(
                 "File name",
@@ -122,9 +142,13 @@ public class NotificationConsumerTest {
         ArgumentCaptor<List<AttachmentRequest>> captor = ArgumentCaptor.captor();
 
         rabbitTemplate.convertAndSend(
-                EXCHANGE_NAME,
+                DELAYED_EXCHANGE_NAME,
                 ROUTING_KEY,
-                notificationRequest
+                notificationRequest,
+                msg -> {
+                    msg.getMessageProperties().getHeaders().put(HEADER_RETRY_COUNT, 0);
+                    return msg;
+                }
         );
 
         await()
@@ -155,6 +179,8 @@ public class NotificationConsumerTest {
     }
 
     @Test
+    @DisplayName("Should retry and succeed when first attempt fails")
+    @Timeout(AWAIT_TIMEOUT_SECONDS)
     public void handleNotification_should_retryAndSucceed_whenFirstAttemptFails() {
         NotificationRequest notificationRequest = new NotificationRequest(
                 List.of("test@email.com", "test2@email.com"),
@@ -170,13 +196,17 @@ public class NotificationConsumerTest {
                 .sendSimpleMessage(anyList(), anyString(), anyString());
 
         rabbitTemplate.convertAndSend(
-                EXCHANGE_NAME,
+                DELAYED_EXCHANGE_NAME,
                 ROUTING_KEY,
-                notificationRequest
+                notificationRequest,
+                msg -> {
+                    msg.getMessageProperties().getHeaders().put(HEADER_RETRY_COUNT, 0);
+                    return msg;
+                }
         );
 
         await()
-                .atMost(10, TimeUnit.SECONDS)
+                .atMost(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .untilAsserted(() -> {
                     verify(emailService, times(2))
                             .sendSimpleMessage(
@@ -184,16 +214,22 @@ public class NotificationConsumerTest {
                                     eq(notificationRequest.subject()),
                                     eq(notificationRequest.body())
                             );
+
                     verify(notificationConsumer, times(2))
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
+
+                    verify(emailService, never())
+                            .sendHtmlMessage(anyList(), anyString(), anyString(), anyList());
                 });
     }
 
     @Test
-    public void handleNotification_should_discardMessage_whenMaxRetriesExceeded() {
+    @DisplayName("Should send to failure queue when max retries exceeded")
+    @Timeout(AWAIT_TIMEOUT_SECONDS)
+    public void handleNotification_should_sendToFailureQueue_whenMaxRetriesExceeded() {
         NotificationRequest notificationRequest = new NotificationRequest(
                 List.of("test@email.com", "test2@email.com"),
-                "A sample test subject",
+                "Retry failure",
                 "A sample test body",
                 null,
                 List.of()
@@ -204,24 +240,30 @@ public class NotificationConsumerTest {
                 .sendSimpleMessage(anyList(), anyString(), anyString());
 
         rabbitTemplate.convertAndSend(
-                EXCHANGE_NAME,
+                DELAYED_EXCHANGE_NAME,
                 ROUTING_KEY,
-                notificationRequest
+                notificationRequest,
+                msg -> {
+                    msg.getMessageProperties().getHeaders().put(HEADER_RETRY_COUNT, 0);
+                    return msg;
+                }
         );
 
         await()
-                .atMost(20, TimeUnit.SECONDS)
+                .atMost(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .untilAsserted(() -> {
-                    verify(notificationConsumer, times(EXPECTED_TOTAL_ATTEMPTS))
+                    verify(notificationConsumer, times(MAX_RETRIES + 1))
                             .handleNotification(any(NotificationRequest.class), any(Message.class));
-                    verify(emailService, never())
-                            .sendHtmlMessage(anyList(), anyString(), anyString(), anyList());
-                    verify(emailService, times(MAX_RETRIES))
+
+                    verify(emailService, times(MAX_RETRIES + 1))
                             .sendSimpleMessage(
                                     eq(notificationRequest.to()),
                                     eq(notificationRequest.subject()),
                                     eq(notificationRequest.body())
                             );
+
+                    verify(emailService, never())
+                            .sendHtmlMessage(anyList(), anyString(), anyString(), anyList());
                 });
     }
 }

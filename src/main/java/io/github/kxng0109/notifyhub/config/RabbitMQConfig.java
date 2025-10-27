@@ -5,62 +5,61 @@ import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFacto
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Configuration
 public class RabbitMQConfig {
-    public static final String EXCHANGE_NAME = "notifications_exchange";
+    public static final String DELAYED_EXCHANGE_NAME = "notifyhub_delayed_exchange";
     public static final String QUEUE_NAME = "notifications_queue";
     public static final String ROUTING_KEY = "notifications.routing.key";
 
-    public static final String DEAD_LETTER_QUEUE_NAME = "notifications_dlq";
-    public static final String DEAD_LETTER_EXCHANGE_NAME = "notifications_dlx";
-//    public static final String DEAD_LETTER_ROUTING_KEY = "notifications.dlq.routing.key";
-
-    @Value("${notifyhub.rabbitmq.dlq.ttl:5000}")
-    private int dlqTtl;
+    public static final String FAILURES_EXCHANGE_NAME = "notifications_failures_exchange";
+    public static final String FAILURES_QUEUE_NAME = "notifications_failures_queue";
 
     @Bean
-    public Queue queue() {
-        return QueueBuilder
-                .durable(QUEUE_NAME)
-                .withArgument("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE_NAME)
-                .withArgument("x-dead-letter-routing-key", ROUTING_KEY)
-                .build();
+    public CustomExchange delayedExchange() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-delayed-type", "topic");
+
+        return new CustomExchange(
+                DELAYED_EXCHANGE_NAME,
+                "x-delayed-message",
+                true,
+                false,
+                args
+        );
     }
 
     @Bean
-    public TopicExchange exchange() {
-        return new TopicExchange(EXCHANGE_NAME);
+    public Queue notificationQueue() {
+        return QueueBuilder.durable(QUEUE_NAME).build();
     }
 
     @Bean
-    public Binding binding(Queue queue, TopicExchange exchange) {
-        return BindingBuilder.bind(queue).to(exchange).with(ROUTING_KEY);
+    public Binding binding(Queue notificationQueue, CustomExchange delayedExchange) {
+        return BindingBuilder.bind(notificationQueue)
+                             .to(delayedExchange)
+                             .with(ROUTING_KEY)
+                             .noargs();
     }
 
     @Bean
-    public Queue dlq() {
-        return QueueBuilder.durable(DEAD_LETTER_QUEUE_NAME)
-                           //How long to wait before retrying
-                           .withArgument("x-message-ttl", dlqTtl)
-                           //Send the messages to the original exchange after TTL expires
-                           .withArgument("x-dead-letter-exchange", EXCHANGE_NAME)
-                           //The routing key to use when sending messages to the original exchange
-                           .withArgument("x-dead-letter-routing-key", ROUTING_KEY)
-                           .build();
+    public Queue failuresQueue() {
+        return QueueBuilder.durable(FAILURES_QUEUE_NAME).build();
     }
 
     @Bean
-    public FanoutExchange dlx() {
-        return new FanoutExchange(DEAD_LETTER_EXCHANGE_NAME);
+    public FanoutExchange failuresExchange() {
+        return new FanoutExchange(FAILURES_EXCHANGE_NAME);
     }
 
     @Bean
-    public Binding dlqBinding(Queue dlq, FanoutExchange dlx) {
-        return BindingBuilder.bind(dlq).to(dlx);
+    public Binding failuresBinding(Queue failuresQueue, FanoutExchange failuresExchange) {
+        return BindingBuilder.bind(failuresQueue).to(failuresExchange);
     }
 
     @Bean
