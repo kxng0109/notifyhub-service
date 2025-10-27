@@ -1,162 +1,198 @@
-# NotifyHub: Asynchronous Notification Service
+# NotifyHub: A Resilient Asynchronous Notification Microservice
 
-NotifyHub is a lightweight, asynchronous notification microservice built with Java, Spring Boot, and RabbitMQ. It provides a simple REST API endpoint to accept notification requests (e.g., for email), queues them using RabbitMQ, and processes them in the background.
+[![Java CI with Maven](https://github.com/kxng0109/notifyhub-service/actions/workflows/ci.yml/badge.svg)](https://github.com/kxng0109/notifyhub-service/actions/workflows/ci.yml)
 
-This project demonstrates professional backend practices including event-driven architecture, robust error handling with Dead-Letter Queues (DLQ), full containerization with Docker Compose, automated testing with Testcontainers, and CI/CD with GitHub Actions.
+## 1. What is NotifyHub?
 
-## Key Features
+NotifyHub is a standalone, production-grade microservice built with Spring Boot and RabbitMQ. Its single purpose is to act as a central "hub" for sending all your application's notifications (like emails) in a **fast, reliable, and asynchronous** way.
 
-* Asynchronous Processing: Accepts notification requests instantly (`202 Accepted`) and processes them in the background via RabbitMQ, preventing API callers from waiting for slow operations like email sending.
+It provides a simple REST API endpoint that your other applications (e.g., a user service, an e-commerce platform) can call. The API accepts the notification request in milliseconds and returns an immediate "202 Accepted" response, while the *actual* slow work of sending the email happens in the background.
 
-* RESTful API: A single, clean endpoint (`POST /api/notifications`) for submitting notification requests, validated using Spring Validation.
+This project is a deep dive into building a truly **resilient, observable, and scalable** backend service that is designed to handle the high load and inevitable failures of a real-world production environment.
 
-* Resilient Error Handling: Utilizes RabbitMQ's Dead-Letter Queue (DLQ) mechanism. Messages that fail processing (e.g., due to email sending errors) are automatically routed to a separate queue (`notifications_dlq`) for later inspection or reprocessing, preventing data loss.
+## 2. The Problem This Solves (The "Why")
 
-* Email Integration: Includes a basic `EmailService` using `spring-boot-starter-mail`. Configured by default for MailHog for easy local development testing (emails are captured, not sent externally).
+Why not just send an email directly from your main application?
 
-* Fully Containerized: Uses Docker Compose to define and run the entire application stack (Spring Boot App, RabbitMQ, MailHog) with a single command. Includes a multi-stage `Dockerfile` for an optimized, smaller application image.
+**The Problem (Synchronous Code):**
+Imagine a user registers on your website. Your `UserController` might look like this:
 
-* Interactive API Docs: Automatically generates interactive API documentation using SpringDoc OpenAPI (Swagger UI).
+1. Validate user input.
+2. Save the user to the database (fast).
+3. **Call an `EmailService` to send a welcome email (SLOW).**
+4. Return a "Success" response to the user.
 
-* Health Monitoring: Exposes a `/actuator/health` endpoint via Spring Boot Actuator for basic health checks.
+What happens if the email server (like MailHog or Gmail) is slow and takes 10 seconds to respond? The user is stuck staring at a loading spinner for 10 seconds, thinking your application is broken. What if the email server is down completely? The entire registration request fails.
 
-* Automated CI: Includes a GitHub Actions workflow that automatically builds the application and runs all tests (including integration tests with Testcontainers) on every push/pull request to the main branch.
+**The Solution (Asynchronous Architecture):**
+This project "decouples" the slow work from the fast work. The new flow is:
 
-## Tech Stack
+1. Validate user input.
+2. Save the user to the database (fast).
+3. **Instantly publish a "send email" job** to the `NotifyHub` API (fast, 20ms).
+4. Return a "Success" response to the user (fast).
 
-* Java 25
-* Spring Boot 3
-* Spring AMQP for RabbitMQ
-* Spring Mail Sender
-* Spring Boot Actuator
-* Spring Validation
-* Lombok
-* RabbitMQ (via Docker)
-* MailHog (via Docker)
-* Docker & Docker Compose
-* Maven
-* JUnit 5, Mockito, Spring Test
-* Testcontainers (for integration testing RabbitMQ)
-* Awaitility (for asynchronous testing)
-* SpringDoc OpenAPI (Swagger)
-* GitHub Actions (CI/CD)
+Meanwhile, in the background, `NotifyHub`'s consumer picks up the job from the RabbitMQ queue and performs the slow, 10-second email sending task. The user is completely unaware of this delay. This is the core of a scalable and professional microservice architecture.
 
-## API Usage
+## 3. Core Features & Architecture
 
-### Send a Notification
+This service is engineered to be reliable above all else.
 
-Submits a notification request to be processed asynchronously.
+* **Asynchronous Processing:** Built around a RabbitMQ message queue to decouple the API from the email-sending work, ensuring fast API response times.
+* **Application-Driven Retries:** This is the core feature. When an email fails to send (e.g., the mail server is down), the service **does not lose the message**. It automatically re-publishes the message to a special **Delayed Message Exchange** with an *exponential backoff delay* (e.g., retry in 5s, then 25s, then 125s).
+* **Failure "Parking Lot" (DLQ):** After a configurable number of retries (e.g., 3), the consumer stops trying and safely routes the permanently-failed message to a `failures_queue` (a "parking lot") for manual inspection by an administrator. **No messages are ever lost.**
+* **Rich Content Support:** The service is designed for real-world use cases, handling bulk sends to thousands of recipients via `BCC`, rich `HTML` content, and `Base64`-encoded file `attachments`.
+* **Full Observability Stack:** The entire application stack is containerized with Docker Compose and includes a complete monitoring solution out-of-the-box (Prometheus + Grafana) to visualize performance and queue depths.
+* **Containerized & Portable:** The entire 5-container stack (App, RabbitMQ, MailHog, Prometheus, Grafana) is defined in a single `docker-compose.yml` file for a one-command setup.
+* **CI/CD Pipeline:** The project is integrated with a GitHub Actions workflow that automatically builds and runs the full test suite (including Testcontainers) on every push to `main`.
+* **Live API Documentation:** Uses SpringDoc OpenAPI to automatically generate a `Swagger UI` page for interactive API testing and documentation.
 
-* ### Endpoint: `POST /api/notifications`
+## 4. Tech Stack
 
-* ### Request Body:
+This project uses a modern, professional, and comprehensive set of tools.
 
-```json
-{
-  "to": "recipient@example.com",
-  "subject": "Your Subject Here",
-  "body": "The content of your notification."
-}
-```
+| Category          | Technology                          | Purpose                                                                                                      |
+| :---------------- | :---------------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| **Application**   | Java 25                             | The core programming language.                                                                               |
+|                   | Spring Boot 3                       | The main application framework for building the REST API and services.                                       |
+|                   | Lombok                              | Reduces boilerplate code (getters, setters, builders).                                                       |
+|                   | Spring Validation                   | For robust validation of incoming API requests.                                                              |
+|                   | Spring Boot Mail                    | For connecting to and sending email via SMTP.                                                                |
+| **Messaging**     | **RabbitMQ**                        | The message broker that enables our asynchronous architecture.                                               |
+|                   | Spring AMQP                         | The Spring library for connecting to and interacting with RabbitMQ.                                          |
+|                   | `rabbitmq_delayed_message_exchange` | The crucial RabbitMQ plugin that enables our application-driven retry logic.                                 |
+| **Monitoring**    | **Spring Boot Actuator**            | Exposes critical application health (`/actuator/health`) and metrics (`/actuator/prometheus`).               |
+|                   | **Prometheus**                      | The time-series database that "scrapes" (collects) and stores all the metrics from Actuator and RabbitMQ.    |
+|                   | **Grafana**                         | The beautiful dashboard and visualization tool that reads from Prometheus.                                   |
+| **Testing**       | **JUnit 5 & Mockito**               | The standard for writing unit and integration tests.                                                         |
+|                   | **Testcontainers**                  | A powerful library that starts real Docker containers (like RabbitMQ) *inside* our automated tests.          |
+|                   | **Awaitility**                      | A library for gracefully testing asynchronous systems by waiting for a condition to be true.                 |
+|                   | **k6** (from Grafana Labs)          | A high-performance load testing tool for stress-testing our API.                                             |
+| **Deployment**    | **Docker & Docker Compose**         | Packages and orchestrates our entire 5-container application stack.                                          |
+|                   | **MailHog**                         | A local "fake" SMTP server that runs in Docker, catches all outgoing emails, and provides a UI to view them. |
+| **CI/CD**         | **GitHub Actions**                  | Automatically builds and runs our full test suite on every push to the repository.                           |
+| **Documentation** | **SpringDoc OpenAPI**               | Generates the live, interactive Swagger UI documentation for our API.                                        |
 
-* ### Success Response (202 Accepted):
+## 5. Getting Started (The One-Command Setup)
 
-```
-Notification request accepted.
-```
+This project is fully containerized. The only prerequisites you need to run the entire 5-container stack are **Git** and **Docker Desktop**.
 
-* ### Failure Response (400 Bad Request):
-If the request body fails validation (e.g., missing fields, invalid email):
+### Step 1: Clone the Repository
 
-```json
-{
-  "to": "'To' must be a valid email",
-  "subject": "Subject cannot be blank"
-  // ... other validation errors
-}
-```
-
-## API Documentation (Swagger UI)
-
-1. Once the application is running (using Docker Compose), interactive API documentation is automatically available via Swagger UI.
-
-Navigate to: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-
-2. You can explore the `/api/notifications` endpoint, view the expected request schema, and use the "Try it out" feature to send requests directly from your browser. Emails sent will be captured by MailHog.
-
-## Getting Started (Docker Compose - Recommended)
-
-This is the simplest and recommended way to run the entire application stack (App, RabbitMQ, MailHog) locally.
-
-### Prerequisites
-
-* Docker Desktop installed and running.
-* Git
-
-### Setup & Run
-
-1. ### Clone the repository:
-
-```
+```bash
 git clone [https://github.com/kxng0109/notifyhub-service.git](https://github.com/kxng0109/notifyhub-service.git)
 cd notifyhub-service
 ```
 
-2. ### Configure Environment Variables:
+### Step 2: Configure Your Environment (The .env file)
 
-   * Copy the example environment file:
+This project uses a .env file to manage all configuration and secrets. This is a professional pattern to keep sensitive data out of the docker-compose.yml file.
 
-       * On Linux/macOS: `cp .env.example .env`
+A template is provided. You just need to copy it.
 
-       * On Windows (Command Prompt): `copy .env.example .env`
+Action: In your terminal, in the project root, run:
 
-       * On Windows (PowerShell): `Copy-Item .env.example .env`
+```bash
+# For Windows (Command Prompt)
+copy .env.example .env
 
-   * Review the `.env` file. You will need to ensure values are set for the following variables (defaults suitable for local development are provided in `.env.example`):
-
-        * `RABBITMQ_USERNAME`: The username for RabbitMQ (default: `guest`).
-
-        * `RABBITMQ_PASSWORD`: The password for RabbitMQ (default: `guest`).
-
-        * `NOTIFYHUB_MAIL_FROM`: The email address used as the 'From' address by the application (default: [noreply@example.com](mailto:noreply@example.com)). (Note: The `.env` file is listed in `.gitignore` and should never be committed.)
-
-3. ### Run with Docker Compose:
-
+# For macOS/Linux (Bash/Zsh)
+cp .env.example .env
 ```
+
+The default values in .env.example are already configured to run the full local stack (RabbitMQ, MailHog) and are perfectly fine for development. You do not need to change anything to get started.
+
+### Step 3: Run the Entire Stack
+
+This single command will:
+
+* Build your Spring Boot application's Docker image from the Dockerfile.
+* Start all 5 containers (App, RabbitMQ, MailHog, Prometheus, Grafana).
+* Connect them all to a private network.
+* Run all health checks in the correct order.
+
+```bash
 docker-compose up --build
 ```
 
-This command will:
+Wait for the logs to settle. The notifyhub-app will patiently wait for RabbitMQ to be healthy before starting. You are ready when you see the Started NotifyhubApplication... log.
 
-* Build the `notifyhub-app` Docker image using the multi-stage Dockerfile.
-* Start the `rabbitmq`, `mailhog`, and `app` containers in the correct order, waiting for RabbitMQ to be healthy before starting the app.
-* Create a Docker network (`notifyhub-net`) for them to communicate.
+### Step 4: Access Your Running Services
 
-### Access Services:
+Your entire professional microservice stack is now running and accessible from your browser:
 
-* NotifyHub API: [http://localhost:8080](http://localhost:8080)
-* Swagger UI: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-* Application Health: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health) (Should return {"status":"UP"})
-* RabbitMQ Management: [http://localhost:15672](http://localhost:15672) (Login: guest / guest or credentials from .env). Check the "Queues" tab; if message processing fails, messages will appear in the notifications_dlq.
-* MailHog Web UI: [http://localhost:8025](http://localhost:8025) (View captured emails here)
+| Service            | URL                                                                            | Credentials   | Purpose                        |
+| :----------------- | :----------------------------------------------------------------------------- | :------------ | :----------------------------- |
+| Your API (Swagger) | [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) | (None)        | Interact with your API.        |
+| RabbitMQ UI        | [http://localhost:15672](http://localhost:15672)                               | guest / guest | See queues & message rates.    |
+| MailHog (Email UI) | [http://localhost:8025](http://localhost:8025)                                 | (None)        | See the emails you send.       |
+| Prometheus UI      | [http://localhost:9090](http://localhost:9090)                                 | (None)        | See the raw metrics data.      |
+| Grafana UI         | [http://localhost:3000](http://localhost:3000)                                 | admin / admin | Visualize your dashboards.     |
+| App Health         | [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health) | (None)        | Check the app's health status. |
 
-### Stop Services:
+## 6. Testing the Service
 
-Press `Ctrl + C` in the terminal where `docker-compose up` is running. To remove the containers and network, run `docker-compose down`.
+This project is built with a "Test-First" mentality. You can (and should) run the full automated test suite, and you can also run the high-performance load tests.
 
-## Running Tests
+### Automated Integration Tests (The Professional Way)
 
-The project includes a comprehensive test suite using JUnit 5, Mockito, Spring Test, Testcontainers, and Awaitility.
+The project is configured to run its entire test suite using Testcontainers. This means the tests are fully self-contained: they automatically start their own temporary RabbitMQ container, run the tests, and then shut it down.
 
-1. Ensure Docker is running (Testcontainers needs it to spin up a temporary RabbitMQ instance for the consumer test).
+Action: Run the full CI-level test suite from your terminal:
 
-2. Run the tests using the Maven wrapper:
+```bash
+# Make sure the Maven wrapper is executable (first time only)
+chmod +x ./mvnw
 
-```
+# Run the tests
 ./mvnw test
 ```
 
-(Note: The tests run completely independently and do not require the docker-compose setup to be running.)
+You will see the Testcontainers logo as it starts RabbitMQ and runs the full test suite.
+
+### Performance & Load Testing (The Fun Part)
+
+We use k6 to simulate high-throughput scenarios. These commands should be run from a separate terminal while your docker-compose up stack is running.
+
+(Note: These commands are for Windows cmd.exe. For Bash/MINGW64, use type load-test.js | docker run... -v "$PWD:/scripts" ...)
+
+#### Test 1: High-Throughput Load Test (load-test.js)
+
+This test unleashes 20 virtual users with no delay to find the system's true bottleneck. This tests the "High Throughput" use case.
+
+```bash
+type load-test.js | docker run --rm -i --network=notifyhub_notifyhub-net grafana/k6:latest run -
+```
+
+Watch your Grafana dashboard to see the consumer's "Queue Depth" (notifications_queue) and "Acknowledge Rate."
+
+#### Test 2: Bulk Send & Rich Content Test (load-test-bulk.js)
+
+This test simulates a real-world bulk send job (1,000 recipients) with HTML and attachments. This tests the "Bulk Send" use case (e.g., a newsletter).
+
+```bash
+type load-test-bulk.js | docker run --rm -i --network=notifyhub_notifyhub-net grafana/k6:latest run -
+```
+
+Watch your MailHog UI ([http://localhost:8025](http://localhost:8025)) to see the rich-content emails being captured.
+
+#### Test 3: DLQ & Failure Test (load-test-dlq.js)
+
+This test sends 10 "poison pill" messages (invalid Base64 data) to prove your error-handling and DLQ mechanism works.
+
+```bash
+type load-test-dlq.js | docker run --rm -i --network=notifyhub_notifyhub-net grafana/k6:latest run -
+```
+
+Watch your RabbitMQ UI ([http://localhost:15672](http://localhost:15672), Queues tab) to see the message count on notifications_dlq go up to 10.
+
+## 7. Future Enhancements
+
+This service is now a robust foundation. The next logical steps to make it a true enterprise platform would be:
+
+* Multi-Channel Refactor: Architect the system to support new channels like SMS. This would involve adding an sms_queue, an SmsConsumer, and an SmsService (e.g., using Twilio), and modifying the NotificationProducer to route based on a channel field.
+* DLQ Consumer: A new consumer could be built to monitor the failures_queue ("parking lot") and send an alert (e.g., to Slack) when a message fails permanently.
+* Production Hardening: Replace the local MailHog settings with a production SMTP provider (like SendGrid or AWS SES) and move all secrets to a secure vault.
 
 ## License
 
