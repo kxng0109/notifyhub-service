@@ -30,13 +30,6 @@ public class MailConfig {
         Properties props = mailSender.getJavaMailProperties();
         props.putAll(mailProperties.getProperties());
 
-        props.put("mail.smtp.connectionpool", "true");
-        props.put("mail.smtp.connectionpool.size", 10);
-
-        props.put("mail.smtp.connectiontimeout", "5000");
-        props.put("mail.smtp.timeout", "5000");
-        props.put("mail.smtp.writetimeout", "5000");
-
         mailSender.setJavaMailProperties(props);
         return mailSender;
     }

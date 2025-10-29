@@ -11,6 +11,10 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.mail.MailSendException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -23,6 +27,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.DELAYED_EXCHANGE_NAME;
@@ -33,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.main.allow-bean-definition-overriding=true")
 @Testcontainers
 @DisplayName("NotificationConsumer Integration Tests")
 public class NotificationConsumerTest {
@@ -48,7 +53,6 @@ public class NotificationConsumerTest {
             DockerImageName.parse("heidiks/rabbitmq-delayed-message-exchange:3.13.0-management")
                            .asCompatibleSubstituteFor("rabbitmq")
     );
-
     @Autowired
     private RabbitTemplate rabbitTemplate;
     @MockitoSpyBean
@@ -63,12 +67,15 @@ public class NotificationConsumerTest {
         registry.add("spring.rabbitmq.username", RABBIT_MQ_CONTAINER::getAdminUsername);
         registry.add("spring.rabbitmq.password", RABBIT_MQ_CONTAINER::getAdminPassword);
 
+        registry.add("spring.rabbitmq.listener.simple.concurrency", () -> 1);
+        registry.add("spring.rabbitmq.listener.simple.max-concurrency", () -> 1);
+
         registry.add("spring.mail.host", () -> "localhost");
         registry.add("spring.mail.port", () -> 1025);
         registry.add("notifyhub.mail.from", () -> "test@notifyhub.com");
 
         registry.add("notifyhub.rabbitmq.maxRetries", () -> MAX_RETRIES);
-        registry.add("notifyhub.rabbitmq.backoff.base", () -> "2");        // 2 instead of 5
+        registry.add("notifyhub.rabbitmq.backoff.base", () -> "2");
         registry.add("notifyhub.rabbitmq.backoff.multiplier", () -> "100");
     }
 
@@ -265,5 +272,25 @@ public class NotificationConsumerTest {
                     verify(emailService, never())
                             .sendHtmlMessage(anyList(), anyString(), anyString(), anyList());
                 });
+    }
+
+    /**
+     * Configuration class for defining custom executor beans used in test scenarios.
+     * This configuration provides synchronous task executors for email sending and RabbitMQ publishing,
+     * ensuring tasks run on the caller's thread during test execution.
+     */
+    @TestConfiguration
+    static class TestExecutorConfig {
+        @Bean
+        @Primary
+        public Executor emailSendingExecutor() {
+            return new SyncTaskExecutor();
+        }
+
+        @Bean
+        @Primary
+        public Executor rabbitmqPublisherExecutor() {
+            return new SyncTaskExecutor();
+        }
     }
 }

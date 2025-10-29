@@ -138,7 +138,7 @@ public class RabbitMQConfig {
         executor.setAllowCoreThreadTimeOut(true);
         executor.setKeepAliveSeconds(30);
         executor.initialize();
-        logger.info("🚀 RabbitMQ Publisher Executor created with core={}, max={}",
+        logger.info("RabbitMQ Publisher Executor created with core={}, max={}",
                     executor.getCorePoolSize(),
                     executor.getMaxPoolSize()
         );
@@ -170,7 +170,7 @@ public class RabbitMQConfig {
         executor.setThreadNamePrefix("email-sender-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
-        logger.info("🚀 Email Sending Executor created with core={}, max={}, queue={}",
+        logger.info("Email Sending Executor created with core={}, max={}, queue={}",
                     corePoolSize, maxPoolSize, queueCapacity);
         return executor;
     }
