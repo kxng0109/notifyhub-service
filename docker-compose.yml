@@ -14,7 +14,7 @@ services:
     networks:
       - notifyhub-net
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -40,10 +40,16 @@ services:
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: local
+
+      JAVA_TOOL_OPTIONS: "-Xmx1536m -XX:+UseG1GC"
+
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_LISTENER_SIMPLE_CONCURRENCY: 10
+      SPRING_RABBITMQ_LISTENER_SIMPLE_CONCURRENCY: 4
+      SPRING_RABBITMQ_LISTENER_SIMPLE_MAX_CONCURRENCY: 10
+      SPRING_RABBITMQ_LISTENER_SIMPLE_PREFETCH: 200
       management.health.rabbit.enabled: true
 
       SPRING_MAIL_HOST: ${SPRING_MAIL_HOST}
@@ -55,12 +61,16 @@ services:
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE}
       management.health.mail.enabled: true
 
+      NOTIFYHUB_EMAIL_EXECUTOR_CORE_POOL_SIZE: 8
+      NOTIFYHUB_EMAIL_EXECUTOR_MAX_POOL_SIZE: 16
+      NOTIFYHUB_EMAIL_EXECUTOR_QUEUE_CAPACITY: 10000
+
     healthcheck:
-        test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-        interval: 10s
-        timeout: 5s
-        retries: 5
-        start_period: 10s
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - notifyhub-net
 
