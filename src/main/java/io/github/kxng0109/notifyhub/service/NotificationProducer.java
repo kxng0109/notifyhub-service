@@ -13,6 +13,10 @@ import java.util.concurrent.Executor;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.DELAYED_EXCHANGE_NAME;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.ROUTING_KEY;
 
+/**
+ * This service is responsible for producing and publishing notification requests to a message queue.
+ * It facilitates asynchronous message delivery using a specified background executor.
+ */
 @Service
 public class NotificationProducer {
     public static final String HEADER_RETRY_COUNT = "x-retry-count";
@@ -29,6 +33,13 @@ public class NotificationProducer {
         this.publishExecutor = publishExecutor;
     }
 
+    /**
+     * Publishes a notification request to a message queue for delivery.
+     * Processes and sends the notification using a background executor for asynchronous execution.
+     *
+     * @param notificationRequest the request containing recipient information, subject, body,
+     *                            and optional attachments for the notification to be sent
+     */
     public void sendNotification(NotificationRequest notificationRequest) {
         logger.info("Received notification request for '{}'", notificationRequest.to());
         publishExecutor.execute(() -> {

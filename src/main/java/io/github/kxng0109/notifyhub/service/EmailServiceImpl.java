@@ -17,6 +17,14 @@ import org.springframework.stereotype.Service;
 import java.util.Base64;
 import java.util.List;
 
+/**
+ * Implementation of the {@link EmailService} interface for sending email messages.
+ * This service supports sending both plain text and HTML emails, with optional attachments
+ * for the latter. It uses Spring's {@link JavaMailSender} to handle email dispatching.
+ *
+ * The class is configured as a Spring service and is excluded from execution in load-test
+ * profiles, which is specified using the {@link Profile} annotation.
+ */
 @Service
 @Profile("!load-test")
 public class EmailServiceImpl implements EmailService {
@@ -31,6 +39,13 @@ public class EmailServiceImpl implements EmailService {
         this.emailSender = emailSender;
     }
 
+    /**
+     * Sends a plain text email message to the specified recipients with the given subject and content.
+     *
+     * @param to the list of recipient email addresses to send the message to
+     * @param subject the subject of the email
+     * @param text the plain text content of the email
+     */
     @Override
     public void sendSimpleMessage(List<String> to, String subject, String text) {
         String[] recipientAddresses = to.toArray(new String[0]);
@@ -46,6 +61,15 @@ public class EmailServiceImpl implements EmailService {
         logger.info("Successfully dispatched plain text email to {} recipients.", to.size());
     }
 
+    /**
+     * Sends an HTML email message to the specified recipients with the given subject, content,
+     * and optional attachments.
+     *
+     * @param to the list of recipient email addresses to send the message to
+     * @param subject the subject of the email
+     * @param htmlContent the HTML content of the email
+     * @param attachments the list of attachments to include in the email (can be null or empty)
+     */
     @Override
     public void sendHtmlMessage(List<String> to, String subject, String htmlContent, List<AttachmentRequest> attachments) {
         String[] recipientAddresses = to.toArray(new String[0]);

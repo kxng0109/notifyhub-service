@@ -9,6 +9,13 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 import java.util.Properties;
 
+/**
+ * Configuration class for configuring mail-related beans and properties.
+ *
+ * This class integrates mail settings specified in {@link MailProperties}
+ * and provides a configurable {@link JavaMailSender} bean with additional
+ * properties for performance optimization and connectivity.
+ */
 @Configuration
 @EnableConfigurationProperties(MailProperties.class)
 public class MailConfig {

@@ -17,6 +17,12 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
+/**
+ * Configuration class for setting up RabbitMQ exchanges, queues, bindings, message converters, and executors.
+ * Provides definitions for delayed exchanges, notification queues, failure handling mechanisms, and optimized
+ * thread pools for RabbitMQ message publishing and email sending tasks. This configuration is designed to support
+ * advanced RabbitMQ messaging patterns and resource-efficient task execution.
+ */
 @Configuration
 public class RabbitMQConfig {
     public static final String DELAYED_EXCHANGE_NAME = "notifyhub_delayed_exchange";
@@ -73,6 +79,19 @@ public class RabbitMQConfig {
         return new Jackson2JsonMessageConverter();
     }
 
+    /**
+     * Configures and returns a SimpleRabbitListenerContainerFactory instance for managing
+     * RabbitMQ message listener containers with customizable settings such as concurrency,
+     * prefetch count, and message converters. The factory enables auto-scaling based on the load
+     * (active and idle triggers) and ensures proper connection factory and message conversion setup.
+     *
+     * @param connectionFactory the factory responsible for creating and managing RabbitMQ connections.
+     * @param jsonMessageConverter the message converter to transform RabbitMQ messages to and from JSON.
+     * @param concurrentConsumers the initial number of concurrent consumers for the listener container.
+     * @param maxConcurrentConsumers the maximum number of concurrent consumers for the listener container.
+     * @param prefetchCount the number of messages to fetch from the broker before blocking the consumer.
+     * @return an initialized instance of SimpleRabbitListenerContainerFactory with the specified properties.
+     */
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
             ConnectionFactory connectionFactory,
@@ -97,6 +116,16 @@ public class RabbitMQConfig {
         return factory;
     }
 
+    /**
+     * Configures and returns an Executor instance specifically for publishing messages
+     * to RabbitMQ. The executor is a ThreadPoolTaskExecutor with customizable core pool size,
+     * maximum pool size, queue capacity, and thread naming convention. It also includes a
+     * CallerRunsPolicy for rejected tasks, allowing rejected tasks to be executed by the
+     * calling thread. The thread pool allows core threads to time out and sets a keep-alive
+     * time for non-core threads.
+     *
+     * @return an initialized Executor instance for RabbitMQ message publishing.
+     */
     @Bean
     public Executor rabbitmqPublisherExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -116,6 +145,18 @@ public class RabbitMQConfig {
         return executor;
     }
 
+    /**
+     * Configures and returns an Executor instance for processing email sending tasks.
+     * The executor is a ThreadPoolTaskExecutor with customizable properties such
+     * as core pool size, maximum pool size, and queue capacity.
+     * It also includes a CallerRunsPolicy for handling task rejections,
+     * ensuring high throughput and resilience.
+     *
+     * @param corePoolSize the number of core threads to keep active, even if idle.
+     * @param maxPoolSize the maximum number of threads in the pool.
+     * @param queueCapacity the capacity of the task queue that holds tasks before they are executed.
+     * @return an initialized Executor instance tailored for email sending.
+     */
     @Bean
     public Executor emailSendingExecutor(
             @Value("${notifyhub.email.executor.core-pool-size:8}") int corePoolSize,

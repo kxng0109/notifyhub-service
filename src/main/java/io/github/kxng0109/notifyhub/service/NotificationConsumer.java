@@ -18,6 +18,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static io.github.kxng0109.notifyhub.config.RabbitMQConfig.*;
 import static io.github.kxng0109.notifyhub.service.NotificationProducer.HEADER_RETRY_COUNT;
 
+/**
+ * NotificationConsumer is a service responsible for processing notification messages
+ * received from RabbitMQ queues. It primarily handles parsing and validating incoming
+ * messages, delegates email sending tasks, and manages retries in case of failures.
+ */
 @Service
 public class NotificationConsumer {
     public static final AtomicInteger counter = new AtomicInteger(0);
@@ -48,6 +53,14 @@ public class NotificationConsumer {
         this.emailSenderExecutor = emailSenderExecutor;
     }
 
+    /**
+     * Consumes a notification message from a RabbitMQ queue, logs the processing information,
+     * validates the notification content, and delegates the processing to an email sender executor.
+     *
+     * @param notificationRequest Contains the details of the notification such as subject, body, and HTML body.
+     * @param message The original RabbitMQ message containing additional metadata such as headers.
+     * @throws AmqpRejectAndDontRequeueException if the notification content is invalid (no body or HTML body).
+     */
     @RabbitListener(queues = QUEUE_NAME)
     public void handleNotification(NotificationRequest notificationRequest, Message message) {
         long startTime = System.currentTimeMillis();
@@ -78,6 +91,19 @@ public class NotificationConsumer {
         ));
     }
 
+    /**
+     * Processes an email request by sending the appropriate email (HTML or plain text)
+     * based on the content of the provided notification request. If the email sending
+     * fails, retries the operation up to a maximum retry limit or sends the request to a
+     * failure queue.
+     *
+     * @param notificationRequest The notification request containing details such as recipient(s),
+     *                             subject, body, and attachments of the email.
+     * @param message             The message object corresponding to the request, used for
+     *                             acknowledgments or re-queuing purposes.
+     * @param retryCount          The current retry attempt count for the email processing operation.
+     * @param counter             The worker instance or thread identifier processing the request.
+     */
     private void processEmail(NotificationRequest notificationRequest, Message message, int retryCount, int counter) {
         long processStart = System.currentTimeMillis();
 
@@ -118,12 +144,26 @@ public class NotificationConsumer {
         }
     }
 
+    /**
+     * Calculates the delay time for a retry attempt based on the retry count,
+     * using an exponential backoff algorithm.
+     *
+     * @param retryCount the number of retry attempts already made
+     * @return the calculated delay time in seconds
+     */
     private long calculateDelay(int retryCount) {
         long delay = (long) (Math.pow(backoffBase, retryCount) * backoffMultiplier);
         logger.debug("Delay of {} seconds has been set to retry", delay);
         return delay;
     }
 
+    /**
+     * Republishes a message to a delayed exchange with a specified delay, incrementing the retry count.
+     *
+     * @param notificationRequest the notification request to be sent with the message
+     * @param message the original message to be republished
+     * @param retryCount the current retry count for the message
+     */
     private void republishWithDelay(
             NotificationRequest notificationRequest,
             Message message,
@@ -152,6 +192,13 @@ public class NotificationConsumer {
         });
     }
 
+    /**
+     * Sends a notification request to the failure queue after the maximum retries have been exceeded.
+     * Includes the failure reason in the message header for debugging purposes.
+     *
+     * @param notificationRequest the notification request object that failed processing
+     * @param failureReason the exception that caused the failure
+     */
     private void sendToFailureQueue(NotificationRequest notificationRequest, Exception failureReason) {
         logger.error(
                 "Max retires of {} exceeded for message. Sending to failure queue: {}.",
